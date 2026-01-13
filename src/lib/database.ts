@@ -317,69 +317,42 @@ class EliteDatabase {
   private seedEliteData(): void {
     if (!this.db) return;
 
-    // Insertar ejercicios FMS completos
-    const fmsExercises = [
-      {
-        id: 'fms_deep_squat',
-        name: 'Deep Squat Assessment',
-        category: 'fms',
-        difficulty: 'elite',
-        target_muscles: 'Full Body',
-        movement_pattern: 'Squat Pattern',
-        equipment: 'None',
-        instructions: '1. Start with feet shoulder width apart\n2. Descend into full squat\n3. Maintain upright torso\n4. Heels remain flat\n5. Knees track over toes',
-        cues: 'Chest up, Knees out, Heels down',
-        elite_variations: 'Overhead Deep Squat, Single Leg Deep Squat',
-        phv_safe: true,
-        min_age: 8,
-        max_age: 80
-      },
-      {
-        id: 'fms_hurdle_step',
-        name: 'Hurdle Step Assessment',
-        category: 'fms',
-        difficulty: 'elite',
-        target_muscles: 'Hip Flexors, Core, Single Leg Stability',
-        movement_pattern: 'Step Pattern',
-        equipment: 'Hurdle',
-        instructions: '1. Step over hurdle maintaining posture\n2. Controlled descent\n3. Alternate legs\n4. No compensation patterns',
-        cues: 'Tall posture, Controlled movement',
-        elite_variations: 'Weighted Hurdle Step, Dynamic Hurdle Step',
-        phv_safe: true,
-        min_age: 10,
-        max_age: 80
-      },
-      {
-        id: 'elite_nordic_curl',
-        name: 'Nordic Hamstring Curl - Elite',
-        category: 'strength',
-        difficulty: 'elite',
-        target_muscles: 'Hamstrings, Glutes, Core',
-        movement_pattern: 'Knee Flexion',
-        equipment: 'Nordic Bench, Partner',
-        instructions: '1. Kneel with ankles secured\n2. Maintain straight line from knees to head\n3. Lower under control\n4. Use minimal assistance\n5. Return to start position',
-        cues: 'Hips extended, Core braced, Controlled descent',
-        elite_variations: 'Weighted Nordic, Single Leg Nordic, Banded Nordic',
-        phv_safe: false, // Restricted during PHV
-        contraindications: 'Active PHV, Hamstring injury history',
-        min_age: 16,
-        max_age: 35
-      }
-    ];
+    console.log(`Insertando ${ELITE_EXERCISES_COMPLETE.length} ejercicios elite en la base de datos...`);
 
-    fmsExercises.forEach(exercise => {
-      this.db!.run(`
-        INSERT INTO exercises (
-          id, name, category, difficulty, target_muscles, movement_pattern,
-          equipment, instructions, cues, elite_variations, phv_safe, min_age, max_age
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        exercise.id, exercise.name, exercise.category, exercise.difficulty,
-        exercise.target_muscles, exercise.movement_pattern, exercise.equipment,
-        exercise.instructions, exercise.cues, exercise.elite_variations,
-        exercise.phv_safe ? 1 : 0, exercise.min_age, exercise.max_age
-      ]);
+    // Insertar todos los ejercicios elite completos
+    ELITE_EXERCISES_COMPLETE.forEach(exercise => {
+      try {
+        this.db!.run(`
+          INSERT INTO exercises (
+            id, name, category, difficulty, target_muscles, movement_pattern,
+            equipment, instructions, cues, common_mistakes, regressions, progressions,
+            phv_safe, contraindications, min_age, max_age, elite_variations
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          exercise.id,
+          exercise.name,
+          exercise.category,
+          exercise.difficulty,
+          JSON.stringify(exercise.targetMuscles),
+          exercise.movementPattern,
+          JSON.stringify(exercise.equipment),
+          JSON.stringify(exercise.instructions),
+          JSON.stringify(exercise.cues),
+          JSON.stringify(exercise.commonMistakes),
+          JSON.stringify(exercise.regressions),
+          JSON.stringify(exercise.progressions),
+          exercise.phvSafe ? 1 : 0,
+          JSON.stringify(exercise.contraindications),
+          exercise.minAge,
+          exercise.maxAge,
+          JSON.stringify(exercise.eliteVariations)
+        ]);
+      } catch (error) {
+        console.error(`Error insertando ejercicio ${exercise.id}:`, error);
+      }
     });
+
+    console.log('Ejercicios elite insertados exitosamente');
   }
 
   // Métodos de acceso a datos
@@ -685,6 +658,55 @@ class EliteDatabase {
 
   isReady(): boolean {
     return this.ready;
+  }
+
+  // Método para insertar todos los ejercicios elite completos
+  async initializeEliteExercises(): Promise<void> {
+    if (!this.db) return;
+
+    // Verificar si ya hay ejercicios en la base de datos
+    const existingCount = this.db.exec('SELECT COUNT(*) as count FROM exercises');
+    if (existingCount.length > 0 && existingCount[0].values[0][0] as number > 0) {
+      console.log('Ejercicios ya existen en la base de datos, saltando inicialización');
+      return;
+    }
+
+    console.log(`Insertando ${ELITE_EXERCISES_COMPLETE.length} ejercicios elite en la base de datos...`);
+
+    // Insertar cada ejercicio completo
+    ELITE_EXERCISES_COMPLETE.forEach(exercise => {
+      try {
+        this.db!.run(`
+          INSERT INTO exercises (
+            id, name, category, difficulty, target_muscles, movement_pattern,
+            equipment, instructions, cues, common_mistakes, regressions, progressions,
+            phv_safe, contraindications, min_age, max_age, elite_variations
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          exercise.id,
+          exercise.name,
+          exercise.category,
+          exercise.difficulty,
+          JSON.stringify(exercise.targetMuscles),
+          exercise.movementPattern,
+          JSON.stringify(exercise.equipment),
+          JSON.stringify(exercise.instructions),
+          JSON.stringify(exercise.cues),
+          JSON.stringify(exercise.commonMistakes),
+          JSON.stringify(exercise.regressions),
+          JSON.stringify(exercise.progressions),
+          exercise.phvSafe ? 1 : 0,
+          JSON.stringify(exercise.contraindications),
+          exercise.minAge,
+          exercise.maxAge,
+          JSON.stringify(exercise.eliteVariations)
+        ]);
+      } catch (error) {
+        console.error(`Error insertando ejercicio ${exercise.id}:`, error);
+      }
+    });
+
+    console.log('Ejercicios elite insertados exitosamente');
   }
 }
 
