@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Play, Square, Camera, Settings, AlertTriangle } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Play, Square, Camera, Settings, AlertTriangle, Download, TrendingUp } from 'lucide-react';
 import { PoseDetector } from './PoseDetector';
 import { useTrainingStore } from '../store/trainingStore';
+import { IntelligentFrameCapture, FrameAnalysis } from '../lib/intelligentFrameCapture';
 
 export const CameraAI: React.FC = () => {
   const [isActive, setIsActive] = useState(false);
@@ -9,41 +10,97 @@ export const CameraAI: React.FC = () => {
   const [currentExercise, setCurrentExercise] = useState('Deep Squat');
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [alerts, setAlerts] = useState<string[]>([]);
+  const [capturedFrames, setCapturedFrames] = useState<FrameAnalysis[]>([]);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [currentPhase, setCurrentPhase] = useState<string>('setup');
+  const [exerciseQuality, setExerciseQuality] = useState<number>(0);
+  
+  const frameCaptureRef = useRef<IntelligentFrameCapture | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   
   const { detectionMetrics, updateDetectionMetrics } = useTrainingStore();
 
   const startDetection = () => {
     setIsActive(true);
     setAlerts([]);
+    setCapturedFrames([]);
+    setIsCapturing(true);
+    setCurrentPhase('setup');
+    setExerciseQuality(0);
+    
+    // Inicializar frame capture inteligente
+    frameCaptureRef.current = new IntelligentFrameCapture(currentExercise);
   };
 
   const stopDetection = () => {
     setIsActive(false);
+    setIsCapturing(false);
+    
+    // Calcular calidad general del ejercicio
+    if (capturedFrames.length > 0) {
+      const avgQuality = capturedFrames.reduce((sum, frame) => sum + frame.quality, 0) / capturedFrames.length;
+      setExerciseQuality(avgQuality);
+    }
   };
 
-  const handlePoseDetected = (results: any) => {
+  const handlePoseDetected = async (results: any) => {
     setDetectionCount(prev => prev + 1);
     
-    // Simular análisis de valgo
-    const mockValgo = Math.random() * 10 - 5; // -5° a +5°
-    const mockQuality = Math.max(0, 100 - Math.abs(mockValgo) * 10);
-    
-    updateDetectionMetrics({
-      valgoAngle: mockValgo,
-      kneeAngle: 85 + Math.random() * 10,
-      hipAngle: 90 + Math.random() * 5,
-      quality: mockQuality
-    });
-
-    // Generar alertas basadas en el análisis
-    const newAlerts: string[] = [];
-    if (Math.abs(mockValgo) > 3) {
-      newAlerts.push(`⚠️ Valgo detectado: ${mockValgo.toFixed(1)}°`);
+    // Capturar frame del video para análisis
+    if (videoRef.current && canvasRef.current && frameCaptureRef.current) {
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      const ctx = canvas.getContext('2d');
+      
+      if (ctx) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // Analizar frame con IA inteligente
+        const frameAnalysis = frameCaptureRef.current.analyzeFrame(results, imageData);
+        
+        // Actualizar fase actual
+        setCurrentPhase(frameAnalysis.phase);
+        
+        // Si es un frame clave, capturarlo
+        if (frameAnalysis.shouldCapture) {
+          setCapturedFrames(prev => [...prev, frameAnalysis]);
+          
+          // Alertas inteligentes basadas en el análisis
+          const newAlerts: string[] = [];
+          
+          if (frameAnalysis.quality < 70) {
+            newAlerts.push(`📉 Calidad baja: ${frameAnalysis.quality.toFixed(0)}% - ${frameAnalysis.captureReason}`);
+          }
+          
+          if (frameAnalysis.keyPoints.symmetry < 0.8) {
+            newAlerts.push(`⚖️ Simetría desbalanceada: ${(frameAnalysis.keyPoints.symmetry * 100).toFixed(0)}%`);
+          }
+          
+          if (frameAnalysis.keyPoints.stability < 0.7) {
+            newAlerts.push(`🎯 Estabilidad comprometida: ${(frameAnalysis.keyPoints.stability * 100).toFixed(0)}%`);
+          }
+          
+          // Recomendaciones específicas
+          frameAnalysis.recommendations.forEach(rec => {
+            newAlerts.push(`💡 ${rec}`);
+          });
+          
+          setAlerts(newAlerts);
+        }
+        
+        // Actualizar métricas de detección
+        updateDetectionMetrics({
+          valgoAngle: frameAnalysis.keyPoints.jointAngles['knee_valgus'] || 0,
+          kneeAngle: frameAnalysis.keyPoints.jointAngles['knee_flexion'] || 90,
+          hipAngle: frameAnalysis.keyPoints.jointAngles['hip_flexion'] || 90,
+          quality: frameAnalysis.quality
+        });
+      }
     }
-    if (mockQuality < 80) {
-      newAlerts.push(`📉 Calidad baja: ${mockQuality.toFixed(0)}%`);
-    }
-    setAlerts(newAlerts);
   };
 
   const exercises = [
@@ -52,8 +109,47 @@ export const CameraAI: React.FC = () => {
     'Nordic Curl',
     'Animal Flow - Crab',
     'Animal Flow - Ape',
-    'Copenhagen Plank'
+    'Copenhagen Plank',
+    'Box Jump Elite',
+    'Depth Jump Elite',
+    'Bounding Elite',
+    'Single Leg RDL Elite',
+    'Cossack Squat Elite',
+    'Turkish Get-Up Elite'
   ];
+
+  const exportAnalysis = () => {
+    const analysisData = {
+      exercise: currentExercise,
+      timestamp: new Date().toISOString(),
+      totalFrames: capturedFrames.length,
+      averageQuality: exerciseQuality,
+      frames: capturedFrames.map(frame => ({
+        phase: frame.phase,
+        quality: frame.quality,
+        symmetry: frame.keyPoints.symmetry,
+        stability: frame.keyPoints.stability,
+        jointAngles: frame.keyPoints.jointAngles,
+        recommendations: frame.recommendations,
+        captureReason: frame.captureReason
+      })),
+      metrics: detectionMetrics
+    };
+
+    const dataStr = JSON.stringify(analysisData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `elite-analysis-${currentExercise}-${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const clearCapturedFrames = () => {
+    setCapturedFrames([]);
+    setExerciseQuality(0);
+  };
 
   return (
     <div className="space-y-6">
@@ -123,10 +219,111 @@ export const CameraAI: React.FC = () => {
         </div>
       </div>
 
+      {/* Panel de Análisis de Frames Capturados */}
+      {capturedFrames.length > 0 && (
+        <div className="bg-white p-6 rounded-lg shadow-sm border">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Análisis de Frames Capturados ({capturedFrames.length})
+            </h3>
+            <div className="flex items-center space-x-2">
+              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                exerciseQuality >= 80 ? 'bg-green-100 text-green-800' :
+                exerciseQuality >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                'bg-red-100 text-red-800'
+              }`}>
+                Calidad: {exerciseQuality.toFixed(0)}%
+              </span>
+              <button
+                onClick={exportAnalysis}
+                className="flex items-center px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
+              >
+                <Download className="h-4 w-4 mr-1" />
+                Exportar
+              </button>
+              <button
+                onClick={clearCapturedFrames}
+                className="flex items-center px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-700"
+              >
+                Limpiar
+              </button>
+            </div>
+          </div>
+
+          {/* Fase Actual */}
+          <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+            <div className="flex items-center">
+              <TrendingUp className="h-5 w-5 text-blue-600 mr-2" />
+              <span className="font-medium text-blue-800">Fase Actual: {currentPhase}</span>
+            </div>
+          </div>
+
+          {/* Lista de Frames Capturados */}
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {capturedFrames.map((frame, index) => (
+              <div key={index} className="p-3 border border-gray-200 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium text-gray-900">
+                    Frame {index + 1} - {frame.phase}
+                  </span>
+                  <div className="flex items-center space-x-2">
+                    <span className={`px-2 py-1 rounded text-xs ${
+                      frame.quality >= 80 ? 'bg-green-100 text-green-800' :
+                      frame.quality >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {frame.quality.toFixed(0)}%
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {new Date(frame.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-2 text-sm mb-2">
+                  <div>
+                    <span className="text-gray-600">Simetría:</span>
+                    <span className="ml-1 font-medium">{(frame.keyPoints.symmetry * 100).toFixed(0)}%</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Estabilidad:</span>
+                    <span className="ml-1 font-medium">{(frame.keyPoints.stability * 100).toFixed(0)}%</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Velocidad:</span>
+                    <span className="ml-1 font-medium">{frame.keyPoints.velocity.toFixed(1)}</span>
+                  </div>
+                </div>
+
+                {frame.recommendations.length > 0 && (
+                  <div className="text-sm">
+                    <span className="text-gray-600">Recomendaciones:</span>
+                    <ul className="mt-1 space-y-1">
+                      {frame.recommendations.map((rec, recIndex) => (
+                        <li key={recIndex} className="text-gray-700">• {rec}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="mt-2 text-xs text-gray-500">
+                  Razón de captura: {frame.captureReason}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Detector de Poses */}
+      {/* Canvas oculto para captura de frames */}
+      <canvas ref={canvasRef} className="hidden" />
+      
       {/* Detector de Poses */}
       <PoseDetector 
         isActive={isActive} 
         onPoseDetected={handlePoseDetected}
+        videoRef={videoRef}
       />
 
       {/* Panel de Métricas */}

@@ -15,8 +15,10 @@ interface PoseResults {
 export const PoseDetector: React.FC<{
   onPoseDetected: (results: PoseResults) => void;
   isActive: boolean;
-}> = ({ onPoseDetected, isActive }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  videoRef?: React.RefObject<HTMLVideoElement>;
+}> = ({ onPoseDetected, isActive, videoRef: externalVideoRef }) => {
+  const internalVideoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = externalVideoRef || internalVideoRef;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [detectionCount, setDetectionCount] = useState(0);

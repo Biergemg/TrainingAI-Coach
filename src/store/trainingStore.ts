@@ -32,6 +32,7 @@ export interface UserProfile {
 
 interface TrainingState {
   user: UserProfile | null;
+  currentAthlete: any | null;
   exercises: Exercise[];
   sessions: Session[];
   currentExercise: Exercise | null;
@@ -48,13 +49,15 @@ interface TrainingState {
 
 interface TrainingActions {
   setUser: (user: UserProfile) => void;
+  setCurrentAthlete: (athlete: any) => void;
+  setExercises: (exercises: Exercise[]) => void;
   setCurrentExercise: (exercise: Exercise) => void;
-  startTraining: () => void;
-  stopTraining: () => void;
+  setTrainingActive: (active: boolean) => void;
   addSession: (session: Session) => void;
   updateDetectionMetrics: (metrics: Partial<TrainingState['detectionMetrics']>) => void;
   addAchievement: (achievement: string) => void;
-  updateStreak: (days: number) => void;
+  incrementStreak: () => void;
+  resetStreak: () => void;
 }
 
 const initialExercises: Exercise[] = [
@@ -101,23 +104,25 @@ const initialExercises: Exercise[] = [
 
 export const useTrainingStore = create<TrainingState & TrainingActions>((set) => ({
   user: null,
+  currentAthlete: null,
   exercises: initialExercises,
   sessions: [],
   currentExercise: null,
   isTrainingActive: false,
   detectionMetrics: {
     valgoAngle: 0,
-    kneeAngle: 0,
-    hipAngle: 0,
-    quality: 0,
+    kneeAngle: 90,
+    hipAngle: 90,
+    quality: 100
   },
   achievements: [],
   streak: 0,
 
   setUser: (user) => set({ user }),
+  setCurrentAthlete: (athlete) => set({ currentAthlete: athlete }),
+  setExercises: (exercises) => set({ exercises }),
   setCurrentExercise: (exercise) => set({ currentExercise: exercise }),
-  startTraining: () => set({ isTrainingActive: true }),
-  stopTraining: () => set({ isTrainingActive: false }),
+  setTrainingActive: (active) => set({ isTrainingActive: active }),
   addSession: (session) => set((state) => ({ 
     sessions: [...state.sessions, session] 
   })),
@@ -127,5 +132,6 @@ export const useTrainingStore = create<TrainingState & TrainingActions>((set) =>
   addAchievement: (achievement) => set((state) => ({
     achievements: [...state.achievements, achievement]
   })),
-  updateStreak: (days) => set({ streak: days }),
+  incrementStreak: () => set((state) => ({ streak: state.streak + 1 })),
+  resetStreak: () => set({ streak: 0 }),
 }));
