@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Camera, User, TrendingUp, Target, Award, Settings, Play, Pause } from 'lucide-react';
 import { CameraAI } from './CameraAI';
-import { TPoseCalibration } from './TPoseCalibration';
+import { TPoseCalibration } from './TposeCalibration';
 import { EliteRoutineGenerator } from './EliteRoutineGenerator';
 import { PatternAnalysis } from './PatternAnalysis';
 import { AutoProgression } from './AutoProgression';
